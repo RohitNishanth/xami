@@ -37,14 +37,13 @@ const NapTable = (props) => {
   useEffect(() => {
     const searchData = (searchValue) => {
       const normalized = (searchValue || "").toLowerCase();
-      const result =
-        data.length &&
-        data.filter(
-          (item) =>
-            item.name.toLowerCase().includes(normalized) ||
-            item.schedule?.toLowerCase().includes(normalized)
-        );
-      setFilteredData(result || []);
+      const source = Array.isArray(data) ? data : [];
+      const result = source.filter(
+        (item) =>
+          item.name?.toLowerCase().includes(normalized) ||
+          item.schedule?.toLowerCase().includes(normalized)
+      );
+      setFilteredData(result);
     };
 
     functionRef.current = {
@@ -62,11 +61,21 @@ const NapTable = (props) => {
     const fetchNapConfigs = async () => {
       try {
         const response = await dispatch(fetchNap());
-        setData(response?.payload || []);
-        setFilteredData(response?.payload || []);
-        functionRef.current?.searchData(search);
+        if (response?.error) {
+          setError(response?.payload?.detail || "Failed to load NAP list.");
+          setData([]);
+          setFilteredData([]);
+        } else {
+          const list = Array.isArray(response?.payload) ? response?.payload : [];
+          setData(list);
+          setFilteredData(list);
+          functionRef.current?.searchData(search);
+        }
       } catch (err) {
         console.error(err);
+        setError("Failed to load NAP list.");
+        setData([]);
+        setFilteredData([]);
       } finally {
         setLoading(false);
       }
