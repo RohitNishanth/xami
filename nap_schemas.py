@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from app.controllers.nap_controller import NAP_SCHEDULE_REVERSE
 
 class NapCreate(BaseModel):
     name: str
@@ -47,11 +48,15 @@ class NapResponse(BaseModel):
     def from_orm(cls, obj):
         created_at = cls.format_datetime(getattr(obj, "created_at", None))
         updated_at = cls.format_datetime(getattr(obj, "updated_at", None))
+        
+        # Convert schedule number to label
+        schedule_value = getattr(obj, "schedule", 1)
+        schedule_label = NAP_SCHEDULE_REVERSE.get(schedule_value, "Annually")
 
         return cls(
             id=obj.id,
             name=obj.name,
-            schedule=obj.schedule,
+            schedule=schedule_label,
             status=getattr(obj, "status", None),
             created_at=created_at,
             updated_at=updated_at

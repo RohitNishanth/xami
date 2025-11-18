@@ -7,7 +7,7 @@ from app.core.config import TABLE_PREFIX
 class Nap(Model):
     id = fields.IntField(pk=True)
     name = fields.CharField(max_length=255)
-    schedule = fields.CharField(max_length=50, default="Annually")
+    schedule = fields.IntField(default=1)  # 1 = Annually, 2 = Half Yearly, 3 = Quarterly
     status = fields.IntField(default=0)  # 0 = active, 1 = inactive 2 = delete
     created_by = fields.IntField(default=0) # user who created it
     updated_by = fields.IntField(default=0) # user who updated it

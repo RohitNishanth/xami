@@ -4,17 +4,18 @@ from app.models.nap import Nap
 from app.schemas.nap import NapEdit
 from app.core.utils import format_datetime_field
 from typing import Optional
-from app.models.sub_category import Sub_category
 from tortoise.functions import Lower
 
 NAP_SCHEDULE_OPTIONS = ["Annually", "Half Yearly", "Quarterly"]
+NAP_SCHEDULE_MAP = {"Annually": 1, "Half Yearly": 2, "Quarterly": 3}
+NAP_SCHEDULE_REVERSE = {1: "Annually", 2: "Half Yearly", 3: "Quarterly"}
 
 
-def _validate_schedule(schedule: Optional[str]) -> str:
+def _validate_schedule(schedule: Optional[str]) -> int:
     value = (schedule or "Annually").strip()
-    if value not in NAP_SCHEDULE_OPTIONS:
+    if value not in NAP_SCHEDULE_MAP:
         raise HTTPException(status_code=400, detail="Invalid schedule option.")
-    return value
+    return NAP_SCHEDULE_MAP[value]
 
 
 async def create_nap(data, user):
@@ -57,10 +58,6 @@ async def edit_nap(nap_id: int, nap_data: NapEdit, user):
         
         if 'status' in nap_data.dict() and nap_data.status is not None:
             nap.status = nap_data.status
-            
-            if nap_data.status != 0:
-                if await Sub_category.filter(mix_details__icontains=f"{nap_id}", mix_type=1, status__not=2).exists():
-                    raise HTTPException(status_code=400, detail="NAP cannot be deactivated if it associates with a sub-category.")
         
         # Save the updated nap
         await nap.save()
@@ -77,13 +74,8 @@ async def edit_nap(nap_id: int, nap_data: NapEdit, user):
     
 # Soft delete nap
 async def soft_delete_nap(nap_id: int):
-    # Remove the nap ID from any `mix_details` fields in related records
     try:
         nap = await Nap.get(id=nap_id)
-
-        if await Sub_category.filter(mix_details__icontains=f"{nap_id}", mix_type=1, status__not=2).exists():
-            raise HTTPException(status_code=400, detail="NAP cannot be deleted if it associates with a sub-category.")
-        
         await Nap.soft_delete(nap_id)  # Soft delete the record
         return {"message": "NAP deleted successfully"}
     except DoesNotExist:
@@ -110,7 +102,7 @@ async def list_naps(status: Optional[int] = None, sort: Optional[str] = 'created
         {
             "id": nap.id,
             "name": nap.name,
-            "schedule": nap.schedule,
+            "schedule": NAP_SCHEDULE_REVERSE.get(nap.schedule, "Annually"),
             "status": nap.status,
             "created_at": format_datetime_field(str(nap.created_at)),
             "updated_at": format_datetime_field(str(nap.updated_at))
@@ -128,7 +120,7 @@ async def fetch_nap(id: int):
     data = {
         "id": record.id,
         "name": record.name,
-        "schedule": record.schedule,
+        "schedule": NAP_SCHEDULE_REVERSE.get(record.schedule, "Annually"),
         "status": record.status,
         "created_at": format_datetime_field(str(record.created_at)),
         "updated_at": format_datetime_field(str(record.updated_at))
