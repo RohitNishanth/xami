@@ -1,7 +1,9 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from app.controllers.nap_controller import NAP_SCHEDULE_REVERSE
+
+# Schedule mapping constants (duplicated here to avoid circular import)
+NAP_SCHEDULE_REVERSE = {1: "Annually", 2: "Half Yearly", 3: "Quarterly"}
 
 class NapCreate(BaseModel):
     name: str
