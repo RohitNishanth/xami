@@ -30,7 +30,10 @@ async def create_nap(data, user):
 
     # Save nap
     try:
-        nap = await Nap.create(name=data.name, schedule=schedule, created_by=user.id)
+        create_data = {"name": data.name, "schedule": schedule}
+        if user and hasattr(user, 'id') and user.id:
+            create_data["created_by"] = user.id
+        nap = await Nap.create(**create_data)
         return {"message": "NAP details added successfully", "data": nap}
     except IntegrityError:
         raise HTTPException(status_code=500, detail="Database error")
@@ -50,11 +53,13 @@ async def edit_nap(nap_id: int, nap_data: NapEdit, user):
         # Update the fields that are provided
         if nap_data.name:
             nap.name = nap_data.name
-            nap.updated_by = user.id
+            if user and hasattr(user, 'id') and user.id:
+                nap.updated_by = user.id
 
         if nap_data.schedule:
             nap.schedule = _validate_schedule(nap_data.schedule)
-            nap.updated_by = user.id
+            if user and hasattr(user, 'id') and user.id:
+                nap.updated_by = user.id
         
         if 'status' in nap_data.dict() and nap_data.status is not None:
             nap.status = nap_data.status

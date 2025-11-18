@@ -9,8 +9,8 @@ class Nap(Model):
     name = fields.CharField(max_length=255)
     schedule = fields.IntField(default=1)  # 1 = Annually, 2 = Half Yearly, 3 = Quarterly
     status = fields.IntField(default=0)  # 0 = active, 1 = inactive 2 = delete
-    created_by = fields.IntField(default=0) # user who created it
-    updated_by = fields.IntField(default=0) # user who updated it
+    created_by = fields.IntField(default=None, null=True) # user who created it
+    updated_by = fields.IntField(default=None, null=True) # user who updated it
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)  # Auto update on change
 
