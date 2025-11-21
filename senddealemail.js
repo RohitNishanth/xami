@@ -9,7 +9,7 @@ import { TagsInput } from "react-tag-input-component";
 import Modal from "../../components/modalPopup/Modal";
 import { sendDealEmail } from "../../features/deal-list/dealsListSlice";
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const isValidEmail = (email = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 const SendDealEmailModal = ({ show, onClose, dealId, dealName }) => {
   const dispatch = useDispatch();
@@ -63,7 +63,7 @@ const SendDealEmailModal = ({ show, onClose, dealId, dealName }) => {
     formik.setFieldValue("emails", filtered);
   };
 
-  const invalidEmails = formik.values.emails.filter((email) => !emailPattern.test(email));
+  const invalidEmails = formik.values.emails.filter((email) => !isValidEmail(email));
   const disableSubmit =
     sendingEmail || invalidEmails.length > 0 || formik.values.emails.length === 0;
 
@@ -104,7 +104,7 @@ const SendDealEmailModal = ({ show, onClose, dealId, dealName }) => {
                     disabled={sendingEmail}
                     onBlur={() => formik.setFieldTouched("emails", true, true)}
                     renderTag={(tag, index) => {
-                      const isInvalid = !emailPattern.test(tag);
+                      const isInvalid = !isValidEmail(tag);
                       return (
                         <span
                           key={`${tag}_${index}`}
@@ -133,9 +133,9 @@ const SendDealEmailModal = ({ show, onClose, dealId, dealName }) => {
                 Type or paste multiple email addresses. Press Enter after each email.
               </div>
 
-              {formik.touched.emails && invalidEmails.length > 0 ? (
+              {formik.touched.emails && Array.isArray(formik.values.emails) && formik.values.emails.some((email) => !isValidEmail(email)) ? (
                 <div className="text-danger mt_6">
-                  {invalidEmails.map((email, idx) => (
+                  {formik.values.emails.filter((email) => !isValidEmail(email)).map((email, idx) => (
                     <div key={`${email}_${idx}`}>{email} is not a valid email address</div>
                   ))}
                 </div>
