@@ -36,16 +36,19 @@ async def get_deal_information(deal_id: int, user: User):
       SELECT d.*, concat(u.first_name,' ',u.last_name) AS nasm_name, c.concept_name AS customer_name
       FROM {TABLE_PREFIX}deals AS d
       JOIN {TABLE_PREFIX}customers AS c ON c.id = d.customer_id
-      JOIN {TABLE_PREFIX}users AS u ON u.id = d.created_by
+      LEFT JOIN {TABLE_PREFIX}users AS u ON u.id = d.created_by
       WHERE d.id = {deal_id} AND d.status != 2
     """
     conn = connections.get("default")
-    deal = (await conn.execute_query_dict(deal_query))[0]
+    deal_result = await conn.execute_query_dict(deal_query)
+    if not deal_result:
+      return {}
+    deal = deal_result[0]
 
     if deal:
       deal_data["deal_id"] = deal["id"]
       deal_data["deal_name"] = deal["deal_name"]
-      deal_data["nasm_name"] = deal["nasm_name"]
+      deal_data["nasm_name"] = deal.get("nasm_name") or ""
       deal_data["deal_status"] = deal["deal_status"]
       deal_data["customer_name"] = deal["customer_name"]
       deal_data["deal_dates"] = "(" + format_datetime_field(str(deal["contract_begins"])) + " - " + format_datetime_field(str(deal["contract_expires"])) + ")"
