@@ -13,7 +13,7 @@ import NotesPanel from "./NotesPanel";
 import Swal from "sweetalert2";
 import ToggleSwitch from "../../components/toggleSwitch/toggleSwitch";
 import CloneDealModal from "./CloneModel";
-import SendDealEmailModal from "./SendDealEmailModal";
+import SendDealEmailModal from "../deal-list/SendDealEmailModal";
 
 
 const DealsTable = (props) => {

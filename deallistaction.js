@@ -244,17 +244,6 @@ const DealListAction = ({ rowIndex, row, isOpen, onToggle, onSend, onClone, onSh
               </Link>
             </li>
           )}
-          {isNasmUser && (
-            <li>
-              <button
-                type="button"
-                className="dropdown-item text-start"
-                onClick={handleSendEmail}
-              >
-                Send Email
-              </button>
-            </li>
-          )}
           {canChange && row.original.deal_type === 1 && row.original.deal_status != 9 ? (
             <li>
               {/* {(deal_link != `/deal/${row.original.customer_id}/${row.original.deal_id}`) ? (
@@ -358,6 +347,17 @@ const DealListAction = ({ rowIndex, row, isOpen, onToggle, onSend, onClone, onSh
               {/* getAction(row.original, userFromSession) */}
             </>
           ) : null}
+          {isNasmUser && (
+            <li>
+              <button
+                type="button"
+                className="dropdown-item text-start"
+                onClick={handleSendEmail}
+              >
+                Send Mail
+              </button>
+            </li>
+          )}
         </DropdownMenu>
       )}
 

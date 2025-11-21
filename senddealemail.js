@@ -1,32 +1,15 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { toast } from "react-toastify";
 import { Spinner } from "react-bootstrap";
+import { toast } from "react-toastify";
+import { TagsInput } from "react-tag-input-component";
 
 import Modal from "../../components/modalPopup/Modal";
 import { sendDealEmail } from "../../features/deal-list/dealsListSlice";
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
-
-const parseEmails = (value = "") =>
-  value
-    .split(/[\s,;]+/)
-    .map((email) => email.trim())
-    .filter(Boolean);
-
-const uniqueEmails = (emails = []) => {
-  const seen = new Set();
-  return emails.filter((email) => {
-    const key = email.toLowerCase();
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-};
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const SendDealEmailModal = ({ show, onClose, dealId, dealName }) => {
   const dispatch = useDispatch();
@@ -34,7 +17,6 @@ const SendDealEmailModal = ({ show, onClose, dealId, dealName }) => {
 
   const formik = useFormik({
     initialValues: {
-      emailInput: "",
       emails: [],
     },
     validationSchema: Yup.object({
@@ -45,26 +27,24 @@ const SendDealEmailModal = ({ show, onClose, dealId, dealName }) => {
     }),
     onSubmit: async (values, { resetForm }) => {
       if (!dealId) {
-        toast.error("Deal information missing. Please try again.");
+        toast.error("Deal information unavailable. Please try again.");
         return;
       }
 
       try {
-        const response = await dispatch(
+        await dispatch(
           sendDealEmail({
             dealId,
             emails: values.emails,
           })
         ).unwrap();
 
-        toast.success(response?.message || "Email sent successfully.");
+        toast.success("Email sent successfully");
         resetForm();
         onClose();
       } catch (error) {
         const errorMessage =
-          error?.detail ||
-          error?.message ||
-          "Unable to send email. Please try again.";
+          error?.detail || error?.message || "Unable to send email. Please try again.";
         toast.error(errorMessage);
       }
     },
@@ -76,24 +56,14 @@ const SendDealEmailModal = ({ show, onClose, dealId, dealName }) => {
     }
   }, [show, dealId]);
 
-  const invalidEmails = useMemo(
-    () => formik.values.emails.filter((email) => !emailPattern.test(email)),
-    [formik.values.emails]
-  );
-
-  const handleEmailChange = (event) => {
-    const rawValue = event.target.value;
-    const parsed = uniqueEmails(parseEmails(rawValue));
-    formik.setFieldValue("emailInput", rawValue);
-    formik.setFieldValue("emails", parsed);
+  const handleEmailsChange = (emails) => {
+    const filtered = emails
+      .filter((email) => email && email.trim() !== "")
+      .map((email) => email.trim());
+    formik.setFieldValue("emails", filtered);
   };
 
-  const handleChipRemove = (index) => {
-    const updated = formik.values.emails.filter((_, idx) => idx !== index);
-    formik.setFieldValue("emails", updated);
-    formik.setFieldValue("emailInput", updated.join(", "));
-  };
-
+  const invalidEmails = formik.values.emails.filter((email) => !emailPattern.test(email));
   const disableSubmit =
     sendingEmail || invalidEmails.length > 0 || formik.values.emails.length === 0;
 
@@ -101,79 +71,77 @@ const SendDealEmailModal = ({ show, onClose, dealId, dealName }) => {
     <Modal
       show={show}
       onClose={onClose}
-      title="Send Deal Email"
+      title="Send Mail"
       disableClose={sendingEmail}
     >
       <form onSubmit={formik.handleSubmit}>
         <div className="body_modal mt_24">
           <div className="row mb-3">
             <div className="col-12">
-              <p className="text-muted mb-0">
-                Deal:&nbsp;
-                <span className="fw-semibold">{dealName || "-"}</span>
-              </p>
-              <p className="text-muted">Deal ID: {dealId ?? "-"}</p>
+              <div className="form-floating">
+                <input
+                  type="text"
+                  className="form-control"
+                  value={dealName || "-"}
+                  readOnly
+                />
+                <label>Deal Name</label>
+              </div>
             </div>
           </div>
 
           <div className="row">
             <div className="col-12">
-              <div className="form-floating">
-                <textarea
-                  id="emailInput"
-                  name="emailInput"
-                  className={`form-control ${
-                    formik.touched.emails && (invalidEmails.length > 0 || formik.errors.emails)
-                      ? "is-invalid"
-                      : ""
-                  }`}
-                  placeholder="Enter email addresses"
-                  value={formik.values.emailInput}
-                  onChange={handleEmailChange}
-                  onBlur={() => formik.setFieldTouched("emails", true, true)}
-                  rows={4}
-                  disabled={sendingEmail}
-                />
-                <label htmlFor="emailInput">Email Addresses *</label>
-              </div>
-              <div className="form-text">
-                Type or paste multiple email addresses. Separate them using commas,
-                semicolons, or new lines.
-              </div>
-
-              {formik.touched.emails && formik.errors.emails && (
-                <div className="text-danger mt_6">{formik.errors.emails}</div>
-              )}
-
-              {invalidEmails.length > 0 && (
-                <div className="text-danger mt_6">
-                  {invalidEmails.join(", ")} {invalidEmails.length === 1 ? "is" : "are"} not valid.
+              <p className="fs_16 fw_400 black-40 mb-2">Email Addresses *</p>
+              <div className="broder_box newborder_box mt-3 highlighted">
+                <div className="scrool_box position-relative zindex_1">
+                  <TagsInput
+                    value={formik.values.emails}
+                    onChange={handleEmailsChange}
+                    name="emails"
+                    placeHolder="Enter email address and press Enter"
+                    classNames={{ tag: "email-tag", input: "email-tag-input" }}
+                    disabled={sendingEmail}
+                    onBlur={() => formik.setFieldTouched("emails", true, true)}
+                    renderTag={(tag, index) => {
+                      const isInvalid = !emailPattern.test(tag);
+                      return (
+                        <span
+                          key={`${tag}_${index}`}
+                          className={`email-tag${isInvalid ? " email-tag-invalid" : ""}`}
+                        >
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...formik.values.emails];
+                              updated.splice(index, 1);
+                              handleEmailsChange(updated);
+                            }}
+                            aria-label={`remove ${tag}`}
+                            disabled={sendingEmail}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    }}
+                  />
                 </div>
-              )}
+              </div>
+              <div className="form-text" style={{ color: "#6c757d", fontSize: "0.95em", marginTop: "2px" }}>
+                Type or paste multiple email addresses. Press Enter after each email.
+              </div>
 
-              {formik.values.emails.length > 0 && (
-                <div className="mt_12">
-                  {formik.values.emails.map((email, index) => (
-                    <span
-                      key={`${email}_${index}`}
-                      className={`email-tag d-inline-flex align-items-center mb-2 ${
-                        emailPattern.test(email) ? "" : "email-tag-invalid"
-                      }`}
-                    >
-                      {email}
-                      <button
-                        type="button"
-                        className="btn btn-link btn-sm p-0 ms-2 text-decoration-none"
-                        onClick={() => handleChipRemove(index)}
-                        disabled={sendingEmail}
-                        aria-label={`Remove ${email}`}
-                      >
-                        ×
-                      </button>
-                    </span>
+              {formik.touched.emails && invalidEmails.length > 0 ? (
+                <div className="text-danger mt_6">
+                  {invalidEmails.map((email, idx) => (
+                    <div key={`${email}_${idx}`}>{email} is not a valid email address</div>
                   ))}
                 </div>
-              )}
+              ) : formik.touched.emails && formik.errors.emails ? (
+                <div className="text-danger mt_6">{formik.errors.emails}</div>
+              ) : null}
             </div>
           </div>
         </div>

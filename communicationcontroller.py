@@ -1,5 +1,6 @@
 from pprint import pprint
 import asyncio
+import json
 import re
 from this import d
 from app.models.user_model import User
@@ -10,14 +11,26 @@ from app.core.config import TABLE_PREFIX
 from app.core.constants import DEPARTMENTS
 from app.models.communication import CommunicationNote
 from datetime import datetime
-from app.core.utils import format_datetime_field, send_email
-from app.models.deal import Deal
+from app.core.utils import format_datetime_field, send_email, format_date_field
+from app.models.deal import Deal, DealBncDetails
 from typing import Optional
 from app.core.constants import COMMUNICATION_ACTION_NAME, COMMUNICATION_DEAL_STATUS_BY_ACTION_NAME
 
 from app.helper.deal_freez_helper import clone_all_deal_tables, clone_all_lookup_tables
 
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+DEAL_STATUS_LABELS = {
+    1: "NASM",
+    2: "Equipment",
+    3: "Sales / Segment",
+    4: "Center of Excellence",
+    5: "Finance",
+    6: "Bottling Partners",
+    7: "Customer Approval",
+    8: "Legal",
+    9: "Activated",
+}
 
 def get_move_to_id(move_to, current_deal_status):
     if move_to == -1:
@@ -424,6 +437,94 @@ async def trigger_email(data, user, move_to = None, current_lable = None, sender
     )
   return {"message": "Email sent successfully"}
 
+
+async def get_manual_deal_snapshot(deal_id: int):
+  query = f"""
+    SELECT
+      d.id,
+      d.deal_name,
+      d.segment,
+      d.contract_begins,
+      d.contract_expires,
+      d.contract_duration,
+      d.volume_annually,
+      d.deal_status,
+      c.concept_name AS customer_name,
+      CONCAT(
+        COALESCE(u.first_name, ''),
+        CASE WHEN u.first_name IS NOT NULL AND u.last_name IS NOT NULL THEN ' ' ELSE '' END,
+        COALESCE(u.last_name, '')
+      ) AS nasm_name
+    FROM {TABLE_PREFIX}deals AS d
+    LEFT JOIN {TABLE_PREFIX}customers AS c ON c.id = d.customer_id
+    LEFT JOIN {TABLE_PREFIX}users AS u ON u.id = d.created_by
+    WHERE d.id = {deal_id} AND d.status != 2
+    LIMIT 1
+  """
+  conn = connections.get("default")
+  result = await conn.execute_query_dict(query)
+  if not result:
+    return None
+  return result[0]
+
+
+async def get_bnc_raw_cases(deal_id: int):
+  details = await DealBncDetails.filter(deal_id=deal_id).first()
+  if details and details.y1_cases:
+    try:
+      payload = json.loads(details.y1_cases)
+      return payload.get("total_bnc_raw_cases") or payload.get("bnc_raw_cases")
+    except (TypeError, ValueError, json.JSONDecodeError):
+      return None
+  return None
+
+
+def format_number(value):
+  if value in (None, "", "null"):
+    return "N/A"
+  try:
+    value_float = float(value)
+    if value_float.is_integer():
+      return f"{int(value_float):,}"
+    return f"{value_float:,.2f}"
+  except (ValueError, TypeError):
+    return str(value)
+
+
+def build_manual_email_body(info: dict):
+  contract_start = format_date_field(str(info.get("contract_begins"))) if info.get("contract_begins") else "N/A"
+  contract_end = format_date_field(str(info.get("contract_expires"))) if info.get("contract_expires") else "N/A"
+  contract_duration = info.get("contract_duration") or "N/A"
+  ftn_gallons = format_number(info.get("volume_annually"))
+  bnc_raw_cases = format_number(info.get("bnc_raw_cases"))
+  customer_name = info.get("customer_name") or "N/A"
+  segment = info.get("segment") or "N/A"
+  nasm_name = (info.get("nasm_name") or "").strip() or "N/A"
+  deal_status_label = DEAL_STATUS_LABELS.get(int(info.get("deal_status", 0)), info.get("deal_status", "N/A"))
+  deal_link = f"https://app.pepsi.com/deal/{info.get('id')}"
+
+  return f"""
+    <p>Hello,</p>
+    <p>Here are the latest details for the selected deal:</p>
+    <table cellpadding="6" cellspacing="0" style="border-collapse: collapse;">
+      <tr><td><strong>Customer</strong></td><td>{customer_name}</td></tr>
+      <tr><td><strong>Deal Name</strong></td><td>{info.get("deal_name") or "N/A"}</td></tr>
+      <tr><td><strong>Segment</strong></td><td>{segment}</td></tr>
+      <tr><td><strong>Deal Status</strong></td><td>{deal_status_label}</td></tr>
+      <tr><td><strong>NASM</strong></td><td>{nasm_name}</td></tr>
+      <tr><td><strong>Contract Start</strong></td><td>{contract_start}</td></tr>
+      <tr><td><strong>Contract End</strong></td><td>{contract_end}</td></tr>
+      <tr><td><strong>Contract Duration</strong></td><td>{contract_duration}</td></tr>
+      <tr><td><strong>FTN Gallons</strong></td><td>{ftn_gallons}</td></tr>
+      <tr><td><strong>BNC Raw Cases</strong></td><td>{bnc_raw_cases}</td></tr>
+    </table>
+    <p style="margin-top:16px;">
+      <a href="{deal_link}" style="color:#0E0E96; text-decoration:none;">Open Deal</a>
+    </p>
+    <p>Thanks,<br/>PepsiCo SAGE Team</p>
+  """
+
+
 async def send_deal_email_to_custom_list(data, user):
   try:
     deal_id = data.get("deal_id")
@@ -479,48 +580,25 @@ async def send_deal_email_to_custom_list(data, user):
         detail="Enter at least one valid email address."
       )
 
-    deal_data = await get_deal_information(deal_id, user)
-    if not deal_data:
+    deal_info = await get_manual_deal_snapshot(deal_id)
+    if not deal_info:
       raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Deal not found."
       )
 
-    template_action = data.get("template_action") or deal_data.get("deal_status") or 1
-    mail_template = await get_email_template(int(template_action))
+    deal_info["bnc_raw_cases"] = await get_bnc_raw_cases(deal_id)
 
-    if not mail_template:
-      raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="Email template not found."
+    subject = f"Deal Information: {deal_info.get('deal_name') or deal_id}"
+    email_body = build_manual_email_body(deal_info)
+
+    for recipient in cleaned_emails:
+      await send_email(
+        to_email=recipient,
+        subject=subject,
+        body=email_body,
+        image_paths={}
       )
-
-    data_keys = [f"[[{key}]]" for key in deal_data.keys()]
-    data_values = [str(value) for value in deal_data.values()]
-
-    mail_subject_raw = mail_template.get("subject", "")
-    mail_content_raw = mail_template.get("content", "")
-
-    mail_subject = str_ireplace(data_keys, data_values, mail_subject_raw)
-    mail_content = str_ireplace(data_keys, data_values, mail_content_raw)
-
-    note = data.get("note", "")
-    email_body = get_email_content(
-      main_content=mail_content,
-      note=note
-    )
-
-    image_paths = {
-      "logo": "images/logo_pepsi.png",
-      "email": "images/email.png"
-    }
-
-    await send_email(
-      to_email=",".join(cleaned_emails),
-      subject=mail_subject,
-      body=email_body,
-      image_paths=image_paths
-    )
 
     return {"message": "Email sent successfully."}
 
