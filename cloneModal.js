@@ -12,17 +12,7 @@ import SelectCustom from "../../components/Select";
 const CloneDealForm = ({ closeForm, initial, isClone, isCloning, nasmMatch, nasmCustomers, selectedCustomer, setSelectedCustomer }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-
-  // Transform nasmCustomers to SelectCustom options format
-  const customerOptions = nasmCustomers?.map((customer) => ({
-    value: customer.id.toString(),
-    label: customer.concept_name,
-  })) || [];
-
-  // Find selected option object
-  const selectedCustomerOption = selectedCustomer
-    ? customerOptions.find((opt) => opt.value === selectedCustomer.toString()) || null
-    : null;
+  const [customerSearch, setCustomerSearch] = useState("");
 
   const formik = useFormik({
     initialValues: {
@@ -38,7 +28,7 @@ const CloneDealForm = ({ closeForm, initial, isClone, isCloning, nasmMatch, nasm
     }),
     onSubmit: async (values, { resetForm, setErrors }) => {
       let name = values.name;
-      let customer = values.targetCustomer ? parseInt(values.targetCustomer, 10) : null;
+      let customer = values.targetCustomer;
 
       try {
         let action = cloneDeal({
@@ -79,6 +69,12 @@ const CloneDealForm = ({ closeForm, initial, isClone, isCloning, nasmMatch, nasm
 
   let createButton = isClone ? "Clone Deal" : "Create";
   createButton = formik.isSubmitting || isCloning ? <Spinner size="sm" className="me-2" /> : createButton;
+  const customerOptions = (nasmCustomers || []).map((customer) => ({
+    value: customer.id,
+    label: customer.concept_name,
+  }));
+  const selectedOption =
+    customerOptions.find((opt) => opt.value === formik.values.targetCustomer) || null;
 
   return (
     <>
@@ -91,31 +87,33 @@ const CloneDealForm = ({ closeForm, initial, isClone, isCloning, nasmMatch, nasm
             </div>
           )}
 
-          {/* Customer Dropdown - Show only if NASM mismatch */}
+          {/* Customer Search + Dropdown - Show only if NASM mismatch and customers are available */}
           {nasmCustomers?.length > 0 && (
-            <div className="row mb_20">
-              <div className="col-12">
-                <label htmlFor="targetCustomer" className="form-label mb-2">
-                  Select Target Customer *
-                </label>
-                <SelectCustom
-                  id="targetCustomer"
-                  options={customerOptions}
-                  value={selectedCustomerOption || null}
-                  onChange={(selectedOption) => {
-                    const customerId = selectedOption ? selectedOption.value : "";
-                    formik.setFieldValue("targetCustomer", customerId);
-                    setSelectedCustomer(customerId);
-                  }}
-                  placeholder="Select Customer"
-                  isDisabled={isCloning}
-                  isSearchable={true}
-                />
-                {formik.touched.targetCustomer && formik.errors.targetCustomer ? (
-                  <div className="text-danger mt_6">{formik.errors.targetCustomer}</div>
-                ) : null}
+            <>
+              <div className="row mb_20">
+                <div className="col-12">
+                  <div className="form-floating">
+                    <SelectCustom
+                      options={customerOptions}
+                      value={selectedOption}
+                      onChange={(option) => {
+                        const value = option?.value || "";
+                        setSelectedCustomer(value);
+                        formik.setFieldValue("targetCustomer", value);
+                      }}
+                      isDisabled={isCloning}
+                      placeholder="Select Customer"
+                      classNamePrefix={`react-select ${
+                        formik.touched.targetCustomer && formik.errors.targetCustomer ? "is-invalid" : ""
+                      }`}
+                      onBlur={() => formik.setFieldTouched("targetCustomer", true)}
+                    />
+                    <label htmlFor="targetCustomer">Select Target Customer *</label>
+                  </div>
+                  {formik.touched.targetCustomer && formik.errors.targetCustomer ? <div className="text-danger mt_6">{formik.errors.targetCustomer}</div> : null}
+                </div>
               </div>
-            </div>
+            </>
           )}
 
           {/* No customers available warning */}
@@ -191,7 +189,7 @@ const CloneDealModal = ({ show, onClose, originalDealId, originalDealName }) => 
 
             const selected_customer = nasm_customers.some((c) => c.id === original_customer_id);
 
-            setSelectedCustomer(selected_customer ? original_customer_id.toString() : "");
+            setSelectedCustomer(selected_customer ? original_customer_id : "");
 
             // If NASM mismatch, update modal title
             if (!nasm_match) {
