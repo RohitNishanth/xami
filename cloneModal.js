@@ -12,14 +12,13 @@ import SelectCustom from "../../components/Select";
 const CloneDealForm = ({ closeForm, initial, isClone, isCloning, nasmMatch, nasmCustomers, selectedCustomer, setSelectedCustomer }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [customerSearch, setCustomerSearch] = useState("");
 
   const formik = useFormik({
     initialValues: {
       clone_id: initial?.clone_id || null,
       id: initial?.id || null,
       name: initial?.name || "",
-      targetCustomer: selectedCustomer || "",
+      targetCustomer: selectedCustomer ? String(selectedCustomer) : "",
     },
     enableReinitialize: true,
     validationSchema: Yup.object({
@@ -69,12 +68,6 @@ const CloneDealForm = ({ closeForm, initial, isClone, isCloning, nasmMatch, nasm
 
   let createButton = isClone ? "Clone Deal" : "Create";
   createButton = formik.isSubmitting || isCloning ? <Spinner size="sm" className="me-2" /> : createButton;
-  const customerOptions = (nasmCustomers || []).map((customer) => ({
-    value: customer.id,
-    label: customer.concept_name,
-  }));
-  const selectedOption =
-    customerOptions.find((opt) => opt.value === formik.values.targetCustomer) || null;
 
   return (
     <>
@@ -87,33 +80,42 @@ const CloneDealForm = ({ closeForm, initial, isClone, isCloning, nasmMatch, nasm
             </div>
           )}
 
-          {/* Customer Search + Dropdown - Show only if NASM mismatch and customers are available */}
+          {/* Customer Dropdown - Show only if NASM mismatch */}
           {nasmCustomers?.length > 0 && (
-            <>
-              <div className="row mb_20">
-                <div className="col-12">
-                  <div className="form-floating">
-                    <SelectCustom
-                      options={customerOptions}
-                      value={selectedOption}
-                      onChange={(option) => {
-                        const value = option?.value || "";
+            <div className="row mb_20">
+              <div className="col-12">
+                <div className="form-floating">
+                  <SelectCustom
+                    options={(nasmCustomers || []).map((customer) => ({
+                      value: String(customer.id),
+                      label: customer.concept_name,
+                    }))}
+                    value={
+                      (() => {
+                        const value = formik.values.targetCustomer;
+                        if (!value) {
+                          return { value: "", label: "Select Customer" };
+                        }
+                        const match = (nasmCustomers || []).find((c) => String(c.id) === String(value));
+                        return match ? { value: String(match.id), label: match.concept_name } : { value: "", label: "Select Customer" };
+                      })()
+                    }
+                    onChange={(option) => {
+                      const value = option ? option.value : "";
+                      formik.setFieldValue("targetCustomer", value);
+                      if (setSelectedCustomer) {
                         setSelectedCustomer(value);
-                        formik.setFieldValue("targetCustomer", value);
-                      }}
-                      isDisabled={isCloning}
-                      placeholder="Select Customer"
-                      classNamePrefix={`react-select ${
-                        formik.touched.targetCustomer && formik.errors.targetCustomer ? "is-invalid" : ""
-                      }`}
-                      onBlur={() => formik.setFieldTouched("targetCustomer", true)}
-                    />
-                    <label htmlFor="targetCustomer">Select Target Customer *</label>
-                  </div>
-                  {formik.touched.targetCustomer && formik.errors.targetCustomer ? <div className="text-danger mt_6">{formik.errors.targetCustomer}</div> : null}
+                      }
+                    }}
+                    isDisabled={isCloning}
+                    placeholder="Select Customer"
+                    tabIndex={1}
+                  />
+                  <label htmlFor="targetCustomer">Select Target Customer *</label>
                 </div>
+                {formik.touched.targetCustomer && formik.errors.targetCustomer ? <div className="text-danger mt_6">{formik.errors.targetCustomer}</div> : null}
               </div>
-            </>
+            </div>
           )}
 
           {/* No customers available warning */}
